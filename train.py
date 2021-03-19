@@ -23,17 +23,18 @@ opt   = optim.Adam(vae.parameters())
 # kl  = Kullback-Leibler divergence loss
 # cor = Spearman correlation to experimentally measured 
 #       protein fitness according to eq.1 from paper
-stats = { 'rl': [], 'kl': [], 'cor': [] }
+stats = {'rl': [], 'kl': [], 'cor': []}
 
 for epoch in range(32):
     # Unsupervised training on the MSA sequences.
     vae.train()
-    
-    epoch_losses = { 'rl': [], 'kl': [] }
+
+    epoch_losses = {'rl': [], 'kl': []}
     for batch in dataloader:
+        batch = batch.to(device)
         opt.zero_grad()
         x_hat, mu, logvar = vae(batch)
-        loss, rl, kl      = vae.loss(x_hat, batch, mu, logvar)
+        loss, rl, kl = vae.loss(x_hat, batch, mu, logvar)
         loss.mean().backward()
         opt.step()
         epoch_losses['rl'].append(rl.mean().item())
@@ -41,26 +42,27 @@ for epoch in range(32):
 
     # Evaluation on mutants
     vae.eval()
+    eval_batch = eval_batch.to(device)
     x_hat_eval, mu, logvar = vae(eval_batch, rep=False)
     elbos, _, _ = vae.loss(x_hat_eval, eval_batch, mu, logvar)
-    diffs       = elbos[1:] - elbos[0] # log-ratio (first equation in the paper)
-    cor, _      = spearmanr(mutants_df.value, diffs.detach())
-    
+    diffs = elbos[1:] - elbos[0]  # log-ratio (first equation in the paper)
+    cor, _ = spearmanr(mutants_df.value, diffs.detach().cpu())
+
     # Populate statistics 
     stats['rl'].append(np.mean(epoch_losses['rl']))
     stats['kl'].append(np.mean(epoch_losses['kl']))
     stats['cor'].append(np.abs(cor))
 
     to_print = [
-        f"{c.HEADER}EPOCH %03d"          % epoch,
-        f"{c.OKBLUE}RL=%4.4f"            % stats['rl'][-1], 
-        f"{c.OKGREEN}KL=%4.4f"           % stats['kl'][-1], 
+        f"{c.HEADER}EPOCH %03d" % epoch,
+        f"{c.OKBLUE}RL=%4.4f" % stats['rl'][-1],
+        f"{c.OKGREEN}KL=%4.4f" % stats['kl'][-1],
         f"{c.OKCYAN}|rho|=%4.4f{c.ENDC}" % stats['cor'][-1]
     ]
     print(" ".join(to_print))
 
 torch.save({
-    'state_dict': vae.state_dict(), 
-    'stats':      stats,
-    'args':       args,
+    'state_dict': vae.state_dict(),
+    'stats': stats,
+    'args': args,
 }, "trained.model.pth")

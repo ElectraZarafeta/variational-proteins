@@ -121,14 +121,33 @@ def hamming_distance(a, b):
     result = 0
     for x, (i, j) in enumerate(zip(a, b)):
         if i != j:
-            #print(f'char not math{i, j}in {x}')
+            # print(f'char not math{i, j}in {x}')
             result += 1
     return result
 
 
+def seq_weights(df):
+    theta = 0.2  # 0.01 for viral proteins?
+    weights = []
+
+    for i in range(df.shape[0]):
+        hamming_dist = []
+        for j in range(df.shape[0]):
+            hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
+
+        norm_dist = [float(dist) / sum(hamming_dist) for dist in hamming_dist]
+
+        weights.append(1 / sum([1 for norm in norm_dist if norm < theta]))
+
+    n_eff = sum(weights)
+    p_s = [w / n_eff for w in weights]
+
+    return p_s
+
+
 def data(batch_size=128, device='cpu'):
-    df = fasta('data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m')
-    df['label'] = labels('data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m')
+    df = fasta(data_path)
+    df['label'] = labels(labels_path)
 
     # First sequence in the dataframe/fasta file is our wildtype.
     wildtype_seq = df.sequence[0]
@@ -144,22 +163,10 @@ def data(batch_size=128, device='cpu'):
 
     dataset = encode(df.trimmed).to(device)
 
-    theta = 0.2  # 0.01 for viral proteins
-    weights = []
+    weights = seq_weights(df)
 
-    for i in range(df.shape[0]):
-        hamming_dist = []
-        for j in range(df.shape[0]):
-            hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
-
-        norm_dist = [float(dist) / sum(hamming_dist) for dist in hamming_dist]
-
-        weights.append(1/sum([1 for norm in norm_dist if norm < theta]))
-
-    n_eff = sum(weights)
-    p_s = [w/n_eff for w in weights]
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(p_s, batch_size)
-    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler) #shuffle=True,
+    sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)  # shuffle=True,
 
     mutants_df = mutants(df)
     mutants_tensor = encode(mutants_df.sequence)
