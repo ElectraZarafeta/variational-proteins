@@ -4,9 +4,14 @@ import torch, time, sys, re
 import pandas as pd
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+import numpy as np
 
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWXYZ-'
 SEQ2IDX = dict(map(reversed, enumerate(ALPHABET)))
+
+data_path = '/data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m'
+labels_path = '/data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m'
+mutations_path = '/data/BLAT_ECOLX_Ranganathan2015.csv'
 
 
 def fasta(file_path):
@@ -126,6 +131,14 @@ def hamming_distance(a, b):
     return result
 
 
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+
+    return v / norm
+
+
 def seq_weights(df):
     theta = 0.2  # 0.01 for viral proteins?
     weights = []
@@ -135,7 +148,7 @@ def seq_weights(df):
         for j in range(df.shape[0]):
             hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
 
-        norm_dist = [float(dist) / sum(hamming_dist) for dist in hamming_dist]
+        norm_dist = normalize(hamming_dist) #[float(dist) / sum(hamming_dist) for dist in hamming_dist]
 
         weights.append(1 / sum([1 for norm in norm_dist if norm < theta]))
 
