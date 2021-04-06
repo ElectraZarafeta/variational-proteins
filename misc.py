@@ -131,16 +131,14 @@ def hamming_distance(a, b):
     return result
 
 
-def normalize(v):
-    norm = np.linalg.norm(v)
-    if norm == 0:
-        return v
+def min_max(v):
+  norm = (v-np.min(v))/(np.max(v)-np.min(v))
 
-    return v / norm
+  return norm
 
 
 def seq_weights(df):
-    theta = 0.2  # 0.01 for viral proteins?
+    theta = 0.2
     weights = []
 
     for i in range(df.shape[0]):
@@ -148,7 +146,7 @@ def seq_weights(df):
         for j in range(df.shape[0]):
             hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
 
-        norm_dist = normalize(hamming_dist) #[float(dist) / sum(hamming_dist) for dist in hamming_dist]
+        norm_dist = min_max(hamming_dist)
 
         weights.append(1 / sum([1 for norm in norm_dist if norm < theta]))
 
@@ -179,7 +177,7 @@ def data(batch_size=128, device='cpu'):
     weights = seq_weights(df)
 
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
-    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)  # shuffle=True,
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
 
     mutants_df = mutants(df)
     mutants_tensor = encode(mutants_df.sequence)
