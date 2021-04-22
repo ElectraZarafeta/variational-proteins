@@ -5,13 +5,24 @@ import pandas as pd
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import numpy as np
+import os
+from tqdm import tqdm
 
+
+# ===== Initialize Important Parameters =====
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWXYZ-'
+dataFilename = 'BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m'
+labelsFilename = 'BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m'
+mutationsFilename = 'data/BLAT_ECOLX_Ranganathan2015.csv'
+weightsFilename = 'WEIGHTS2.txt'
+#===============================================
+
 SEQ2IDX = dict(map(reversed, enumerate(ALPHABET)))
 
-data_path = '/data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m'
-labels_path = '/data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m'
-mutations_path = '/data/BLAT_ECOLX_Ranganathan2015.csv'
+data_path = os.path.abspath(os.path.join(os.getcwd(), 'data', dataFilename))
+labels_path = os.path.abspath(os.path.join(os.getcwd(), 'data', labelsFilename))
+mutations_path = os.path.abspath(os.path.join(os.getcwd(), 'data', mutationsFilename))
+weights_path = os.path.abspath(os.path.join(os.getcwd(), 'data', weightsFilename))
 
 
 def fasta(file_path):
@@ -138,22 +149,38 @@ def min_max(v):
 
 
 def seq_weights(df):
-    theta = 0.2
-    weights = []
+    try: # Automatically load the normalized weights saved inside `./data` directory
+        with open(weights_path) as f:
+            w_list = f.read().splitlines()
 
-    for i in range(df.shape[0]):
-        hamming_dist = []
-        for j in range(df.shape[0]):
-            hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
+        print(f'Weights file exists, loading from: {weights_path}')
+        p_s = [float(w) for w in w_list[0:-1]]
+        n_eff = float(w_list[-1])
+        
+        return p_s, n_eff
 
-        norm_dist = min_max(hamming_dist)
+    except: # Calculate the weights if no relevant file is found inside `./data` directory
+        nSeq = df.shape[0]
+        theta = 0.2
+        
+        print(f'Calculating weights for all {nSeq} sequences...')
+        weights = np.zeros(nSeq, dtype=float)
+        hamming_dist = np.zeros(nSeq, dtype=int)
+        for i in tqdm(range(nSeq)):
+            for j in range(nSeq):
+                hamming_dist[j] = hamming_distance(df['trimmed'][i], df['trimmed'][j])
 
-        weights.append(1 / sum([1 for norm in norm_dist if norm < theta]))
+            norm_dist = min_max(hamming_dist.tolist())
 
-    n_eff = sum(weights)
-    p_s = [w / n_eff for w in weights]
+            weights[i] = (1 / sum([1 for norm in norm_dist if norm < theta]))
 
-    return p_s
+        n_eff = weights.sum()
+        p_s = weights/n_eff
+
+        print(f'Saving weights file to: {weights_path}')
+        np.savetxt(weights_path, np.append(p_s,n_eff), delimiter=',')
+
+        return p_s.tolist(), n_eff
 
 
 def data(batch_size=128, device='cpu'):
@@ -174,7 +201,7 @@ def data(batch_size=128, device='cpu'):
 
     dataset = encode(df.trimmed).to(device)
 
-    weights = seq_weights(df)
+    weights, Neff = seq_weights(df)
 
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
