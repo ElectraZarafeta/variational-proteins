@@ -5,13 +5,24 @@ import pandas as pd
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import numpy as np
+import os
 
+
+# ===== Initialize Important Parameters =====
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWXYZ-'
+dataFilename = 'BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m'
+labelsFilename = 'BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m'
+mutationsFilename = 'data/BLAT_ECOLX_Ranganathan2015.csv'
+weightsFilename = 'WEIGHTS2.txt'
+#===============================================
+
 SEQ2IDX = dict(map(reversed, enumerate(ALPHABET)))
 
-data_path = '/data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105.a2m'
-labels_path = '/data/BLAT_ECOLX_hmmerbit_plmc_n5_m30_f50_t0.2_r24-286_id100_b105_LABELS.a2m'
-mutations_path = '/data/BLAT_ECOLX_Ranganathan2015.csv'
+data_path = os.path.abspath(os.path.join(os.getcwd(), 'data', dataFilename))
+labels_path = os.path.abspath(os.path.join(os.getcwd(), 'data', labelsFilename))
+mutations_path = os.path.abspath(os.path.join(os.getcwd(), 'data', mutationsFilename))
+weights_path = os.path.abspath(os.path.join(os.getcwd(), 'data', weightsFilename))
+
 
 
 def fasta(file_path):
@@ -140,22 +151,28 @@ def normalize(v):
 
 
 def seq_weights(df):
-    theta = 0.2  # 0.01 for viral proteins?
-    weights = []
+    try: # Automatically load the normalized weights saved inside `./data` directory
+        weights_list = open(weights_path, 'r').readlines()[0].split(",")
+        weights=[float(w) for w in weights_list]
+        return weights
 
-    for i in range(df.shape[0]):
-        hamming_dist = []
-        for j in range(df.shape[0]):
-            hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
+    except: # Calculate the weights if no relevant file is found inside `./data` directory
+        theta = 0.2  # 0.01 for viral proteins?
+        weights = []
 
-        norm_dist = normalize(hamming_dist) #[float(dist) / sum(hamming_dist) for dist in hamming_dist]
+        for i in range(df.shape[0]):
+            hamming_dist = []
+            for j in range(df.shape[0]):
+                hamming_dist.append(hamming_distance(df['trimmed'][i], df['trimmed'][j]))
 
-        weights.append(1 / sum([1 for norm in norm_dist if norm < theta]))
+            norm_dist = normalize(hamming_dist) #[float(dist) / sum(hamming_dist) for dist in hamming_dist]
 
-    n_eff = sum(weights)
-    p_s = [w / n_eff for w in weights]
+            weights.append(1 / sum([1 for norm in norm_dist if norm < theta]))
 
-    return p_s
+        n_eff = sum(weights)
+        p_s = [w / n_eff for w in weights]
+
+        return p_s
 
 
 def data(batch_size=128, device='cpu'):
