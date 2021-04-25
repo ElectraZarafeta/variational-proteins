@@ -66,3 +66,4 @@ torch.save({
     'stats': stats,
     'args': args,
 }, "trained.model.pth")
+
