@@ -20,6 +20,7 @@ class LinearVariational(torch.nn.Module):
         if getattr(parent, 'accumulated_kl_div', None) is None:
             parent.accumulated_kl_div = 0
 
+
         # init variance
         variance = 2 / (out_features + in_features)
 
@@ -40,6 +41,7 @@ class LinearVariational(torch.nn.Module):
 
             # init bias variance prior
             self.b_p = torch.nn.Parameter((-10) * torch.ones(out_features))
+
 
     def kl_divergence(self, p_q, mu_theta, p_theta, layer_s):
         if layer_s:

@@ -4,6 +4,7 @@ from linear_variational import LinearVariational
 from torch.distributions.kl import kl_divergence
 from torch.nn import functional as F
 
+
 class KL:
     accumulated_kl_div = 0
 
@@ -25,20 +26,16 @@ class VAE(torch.nn.Module):
         self.bayesian = True
 
         self.encoder_seq = torch.nn.Sequential(
-            LinearVariational(self.input_size, int(self.hidden_size * (3 / 4)), self.kl_loss),
-            #torch.nn.Linear(self.input_size, int(self.hidden_size * (3 / 4))),
+            torch.nn.Linear(self.input_size, int(self.hidden_size * (3 / 4))),
             torch.nn.Dropout(self.dropout),
             torch.nn.ReLU(),
-            LinearVariational(int(self.hidden_size * (3 / 4)), int(self.hidden_size * (3 / 4)), self.kl_loss),
-            #torch.nn.Linear(int(self.hidden_size * (3 / 4)), int(self.hidden_size * (3 / 4))),
+            torch.nn.Linear(int(self.hidden_size * (3 / 4)), int(self.hidden_size * (3 / 4))),
             torch.nn.Dropout(self.dropout),
             torch.nn.ReLU(),
         )
-        
-        self.fc21 = LinearVariational(int(self.hidden_size * (3 / 4)), self.latent_size, self.kl_loss)
-        self.fc22 = LinearVariational(int(self.hidden_size * (3 / 4)), self.latent_size, self.kl_loss)
-        #self.fc21 = torch.nn.Linear(int(self.hidden_size * (3 / 4)), self.latent_size)
-        #self.fc22 = torch.nn.Linear(int(self.hidden_size * (3 / 4)), self.latent_size)
+
+        self.fc21 = torch.nn.Linear(int(self.hidden_size * (3 / 4)), self.latent_size)
+        self.fc22 = torch.nn.Linear(int(self.hidden_size * (3 / 4)), self.latent_size)
 
         self.decoder_seq = torch.nn.Sequential(
             LinearVariational(self.latent_size, self.hidden_size // 16, self.kl_loss),
@@ -53,7 +50,8 @@ class VAE(torch.nn.Module):
         if self.bayesian:
             self.W = LinearVariational(self.inner, (self.hidden_size // self.h2_div) * self.seq_len, self.kl_loss)  # W
             self.C = LinearVariational(self.alphabet_size, self.inner, self.kl_loss)  # D
-            self.S = LinearVariational(self.seq_len, (self.hidden_size // self.h2_div // self.div), self.kl_loss, layer_s = True)  # S
+            self.S = LinearVariational(self.seq_len, (self.hidden_size // self.h2_div // self.div), self.kl_loss,
+                                       layer_s=True)  # S
 
             lamb_W_out_b_dim = self.input_size
 
@@ -65,19 +63,14 @@ class VAE(torch.nn.Module):
             self.lamb = torch.nn.Parameter(torch.Tensor([0.1] * self.input_size))
             self.W_out_b = torch.nn.Parameter(torch.Tensor([0.1]))
 
-        """
         for layer in self.children():
             if str(layer) == 'Linear':
                 torch.nn.init.xavier_normal_(layer.weight)
 
                 if layer.bias is not None:
                     torch.nn.init.constant_(layer.bias, 0.1)
-        
-        torch.nn.init.xavier_normal_(self.fc21.weight)
-        torch.nn.init.constant_(self.fc21.bias, 0.1)
-        torch.nn.init.xavier_normal_(self.fc22.weight)
+
         torch.nn.init.constant_(self.fc22.bias, -5)
-        """
 
     def accumulated_kl_div(self):
         return self.kl_loss.accumulated_kl_div
