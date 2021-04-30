@@ -8,6 +8,8 @@ import numpy as np
 import os
 from tqdm import tqdm
 
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
 
 # ===== Initialize Important Parameters =====
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWXYZ-'
@@ -209,7 +211,7 @@ def data(batch_size=128, device='cpu'):
     mutants_df = mutants(df)
     mutants_tensor = encode(mutants_df.sequence)
 
-    return dataloader, df, mutants_tensor, mutants_df
+    return dataloader, df, mutants_tensor, mutants_df, Neff
 
 
 # nice colors for the terminal
@@ -226,4 +228,4 @@ class c:
 
 
 if __name__ == "__main__":
-    dataloader, df, mutants_tensor, mutants_df = data()
+    dataloader, df, mutants_tensor, mutants_df, Neff = data()
