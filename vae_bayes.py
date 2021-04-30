@@ -27,7 +27,7 @@ def linear_variational(module, name=None):
     m.register_parameter('weight_logvar', w_logv)
 
     torch.nn.init.normal_(w_mu, 0.0, std=variance ** (1 / 2))
-    torch.nn.init.constant_(w_logv, -10)
+    torch.nn.init.constant_(w_logv, -5)
 
     # check if bias is included
     if include_bias:
@@ -74,7 +74,7 @@ class VAE(torch.nn.Module):
         self.alphabet_size = kwargs['alphabet_size']
         self.seq_len = kwargs['seq_len']
         self.input_size = self.alphabet_size * self.seq_len
-        self.dropout = 0.3
+        self.dropout = 0.0
         self.Neff = kwargs['Neff']
         self.div = 8
         self.inner = 16

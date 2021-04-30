@@ -1,7 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 import os
-from vae_bayesian import VAE
+from vae_bayes import VAE
+#from vae_bayesian import VAE
 import numpy as np
 import pandas as pd
 
@@ -51,7 +52,6 @@ ax1.tick_params(axis='y', labelcolor='C0')
 ax1.plot(model_dict['stats']['loss'], lw=2, c='C0')
 plt.show()
 
-"""
 plt.figure(figsize=(8,4))
 plt.title(r"$|Spearman\ \rho|$ correlation to experimental data")
 plt.xlabel('EPOCH', c='C3')
@@ -61,7 +61,6 @@ plt.tick_params(axis='y', labelcolor='C9')
 plt.axhline(y=0.74388, c='C6', lw=2, label=f'Paper result (without ensambling) ' + rf'$|\rho|={round(0.74388, 4)}$')
 plt.legend()
 plt.show()
-"""
 
 plt.figure(figsize=(8,6))
 plt.title("Latent space")
