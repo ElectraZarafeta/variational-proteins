@@ -82,9 +82,6 @@ class VAE(torch.nn.Module):
     def accumulated_kl_div(self):
         return self.kl_loss.accumulated_kl_div
 
-    def reset_kl_div(self):
-        self.kl_loss.accumulated_kl_div = 0
-
     def logp(self, batch, rand=False):
         x = batch.view(-1, self.input_size)
         mu, logvar = self.encoder(x)
@@ -122,7 +119,6 @@ class VAE(torch.nn.Module):
         KLP += kl_divergence(q_W_out_b, p_W_out_b).sum()
 
         KLP += self.kl_loss.accumulated_kl_div
-        self.reset_kl_div()
         KLP /= self.Neff
 
         loss = (RL + beta * KLZ).mean() + KLP
