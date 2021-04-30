@@ -149,40 +149,62 @@ def min_max(v):
 
   return norm
 
+def gen_weights(encodings, batch_size = 1024):
+    print(f"Calculating {len(encodings)} weights...")
 
-def seq_weights(df):
-    try: # Automatically load the normalized weights saved inside `./data` directory
-        with open(weights_path) as f:
-            w_list = f.read().splitlines()
+    msk_idx = 999 # Data.ALPHABET.find('-')
+    seq_len = encodings.shape[2]
+    flat    = encodings.flatten(1)
+    batches = flat.shape[0] // batch_size + 1
+    weights = []
 
-        print(f'Weights file exists, loading from: {weights_path}')
-        p_s = [float(w) for w in w_list[0:-1]]
-        n_eff = float(w_list[-1])
+    for i in range(batches):
+        print(f"\tBatch {i}")
+        window  =      flat[i * batch_size : (i+1) * batch_size]
+        encwin  = encodings[i * batch_size : (i+1) * batch_size]
+        smatrix = window @ flat.T                  # Similarity matrix
+        seq_len = encwin.argmax(dim=1) != msk_idx  # Mask character `-` do
+        seq_len = seq_len.sum(-1).unsqueeze(-1)    #  not contribute to weight
+        w_batch = 1.0 / (smatrix / seq_len).gt(0.8).sum(1).float()
+        weights.append(w_batch)
+
+    weights = torch.cat(weights) 
+    neff    = weights.sum()
+    return (weights, neff)
+
+# def seq_weights(df):
+#     try: # Automatically load the normalized weights saved inside `./data` directory
+#         with open(weights_path) as f:
+#             w_list = f.read().splitlines()
+
+#         print(f'Weights file exists, loading from: {weights_path}')
+#         p_s = [float(w) for w in w_list[0:-1]]
+#         n_eff = float(w_list[-1])
         
-        return p_s, n_eff
+#         return p_s, n_eff
 
-    except: # Calculate the weights if no relevant file is found inside `./data` directory
-        nSeq = df.shape[0]
-        theta = 0.2
+#     except: # Calculate the weights if no relevant file is found inside `./data` directory
+#         nSeq = df.shape[0]
+#         theta = 0.2
         
-        print(f'Calculating weights for all {nSeq} sequences...')
-        weights = np.zeros(nSeq, dtype=float)
-        hamming_dist = np.zeros(nSeq, dtype=int)
-        for i in tqdm(range(nSeq)):
-            for j in range(nSeq):
-                hamming_dist[j] = hamming_distance(df['trimmed'][i], df['trimmed'][j])
+#         print(f'Calculating weights for all {nSeq} sequences...')
+#         weights = np.zeros(nSeq, dtype=float)
+#         hamming_dist = np.zeros(nSeq, dtype=int)
+#         for i in tqdm(range(nSeq)):
+#             for j in range(nSeq):
+#                 hamming_dist[j] = hamming_distance(df['trimmed'][i], df['trimmed'][j])
 
-            norm_dist = min_max(hamming_dist.tolist())
+#             norm_dist = min_max(hamming_dist.tolist())
 
-            weights[i] = (1 / sum([1 for norm in norm_dist if norm < theta]))
+#             weights[i] = (1 / sum([1 for norm in norm_dist if norm < theta]))
 
-        n_eff = weights.sum()
-        p_s = weights/n_eff
+#         n_eff = weights.sum()
+#         p_s = weights/n_eff
 
-        print(f'Saving weights file to: {weights_path}')
-        np.savetxt(weights_path, np.append(p_s,n_eff), delimiter=',')
+#         print(f'Saving weights file to: {weights_path}')
+#         np.savetxt(weights_path, np.append(p_s,n_eff), delimiter=',')
 
-        return p_s.tolist(), n_eff
+#         return p_s.tolist(), n_eff
 
 
 def data(batch_size=128, device='cpu'):
@@ -202,14 +224,15 @@ def data(batch_size=128, device='cpu'):
     # ''.join(set(''.join(df.trimmed.to_list())))
 
     dataset = encode(df.trimmed).to(device)
+    weights, Neff = gen_weights(dataset)
 
-    weights, Neff = seq_weights(df)
+    # weights, Neff = seq_weights(df)
 
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
 
     mutants_df = mutants(df)
-    mutants_tensor = encode(mutants_df.sequence)
+    mutants_tensor = encode(mutants_df.sequence).to(device)
 
     return dataloader, df, mutants_tensor, mutants_df, Neff
 

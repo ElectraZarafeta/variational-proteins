@@ -1,65 +1,52 @@
 import torch
+from torch import nn
 import torch.distributions as dist
 from torch.nn import functional as F
 from torch.distributions.kl import kl_divergence
 
+def linear_variational(module, name = None):
+    m, with_bias = module, module.bias is not None 
+    setattr(module, 'name', name)
+    
+    mu_W     = nn.Parameter(torch.Tensor(m.out_features, m.in_features))
+    logvar_W = nn.Parameter(torch.Tensor(m.out_features, m.in_features))
+    
+    # register parameter checks if it has been registered, Parameter dos not do that
+    m.register_parameter("weight_mu", mu_W) 
+    m.register_parameter("weight_logvar", logvar_W)
 
-def linear_variational(module, name=None):
-    m, include_bias = module, module.bias is not None
+    var = 2/(m.out_features + m.in_features)
+    nn.init.normal_(mu_W, 0.0, std=var**(1/2))
+    nn.init.constant_(logvar_W, -5)
+    
+    if with_bias:
+        mu_bias     = nn.Parameter(torch.Tensor(m.out_features))
+        logvar_bias = nn.Parameter(torch.Tensor(m.out_features))
 
-    setattr(m, "name", name)
+        nn.init.constant_(mu_bias, 0.1)
+        nn.init.constant_(logvar_bias, -10)
 
-    del m._parameters['weight']
+        m.register_parameter('bias_mu',     mu_bias)
+        m.register_parameter('bias_logvar', logvar_bias)
 
-    if include_bias:
-        del m._parameters['bias']
-
-    # init variance
-    variance = 2 / (m.out_features + m.in_features)
-
-    # init weight mu prior
-    w_mu = torch.nn.Parameter(torch.Tensor(m.out_features, m.in_features))
-
-    # init weight variance prior
-    w_logv = torch.nn.Parameter(torch.Tensor(m.out_features, m.in_features))
-
-    m.register_parameter('weight_mu', w_mu)
-    m.register_parameter('weight_logvar', w_logv)
-
-    torch.nn.init.normal_(w_mu, 0.0, std=variance ** (1 / 2))
-    torch.nn.init.constant_(w_logv, -5)
-
-    # check if bias is included
-    if include_bias:
-        # init bias mu prior
-        b_mu = torch.nn.Parameter(torch.Tensor(m.out_features))
-
-        # init bias variance prior
-        b_logv = torch.nn.Parameter(torch.Tensor(m.out_features))
-
-        m.register_parameter('bias_mu', b_mu)
-        m.register_parameter('bias_logvar', b_logv)
-
-        torch.nn.init.constant_(b_mu, 0.1)
-        torch.nn.init.constant_(b_logv, -10)
+        del m._parameters['bias'] # <- we are going to recreate it 
+        setattr(m, 'bias', None)  #    when sampling for new weights
 
     m.register_forward_pre_hook(sample_new_params)
-    sample_new_params(m, include_bias)
-
     return m
 
-
-def sample_new_params(module, include_bias=False):
+def sample_new_params(module, input = None):
     m = module
+    
+    if ('weight' in m._parameters.keys()):
+        del m._parameters['weight']
 
-    q_w = dist.Normal(m.weight_mu, m.weight_logvar.mul(1 / 2).exp())
-    setattr(m, "weight", q_w.rsample())
+    sample = dist.Normal(m.weight_mu, m.weight_logvar.mul(1/2).exp()).rsample()
+    setattr(m, "weight", sample)
 
-    if include_bias:
-        q_b = dist.Normal(m.bias_mu, m.bias_logvar.mul(1 / 2).exp())
-        setattr(m, "bias", q_b.rsample())
-    else:
-        setattr(m, "bias", None)
+    if hasattr(m, 'bias_mu'):
+        sample = dist.Normal(m.bias_mu, m.bias_logvar.mul(1/2).exp()).rsample()
+        setattr(m, 'bias', sample)
 
     return None
 
@@ -69,16 +56,16 @@ class VAE(torch.nn.Module):
         super(VAE, self).__init__()
         self.variational_layers = []
 
-        self.hidden_size = 32
-        self.latent_size = 2
+        self.hidden_size = 2000
+        self.latent_size = 30
         self.alphabet_size = kwargs['alphabet_size']
         self.seq_len = kwargs['seq_len']
         self.input_size = self.alphabet_size * self.seq_len
         self.dropout = 0.0
         self.Neff = kwargs['Neff']
-        self.div = 8
-        self.inner = 16
-        self.h2_div = 1
+        self.div = 4
+        self.inner = 40
+        self.h2_div = 4
         self.bayesian = True
 
         # Encoder
@@ -94,14 +81,14 @@ class VAE(torch.nn.Module):
 
         # Decoder
         self.fc3 = torch.nn.Linear(self.latent_size, self.hidden_size // 16)
-        self.fc3 = linear_variational(self.fc3)
-        self.variational_layers.append(self.fc3)
-        self.dpd1 = torch.nn.Dropout(self.dropout)
+        # self.fc3 = linear_variational(self.fc3)
+        # self.variational_layers.append(self.fc3)
+        # self.dpd1 = torch.nn.Dropout(self.dropout)
 
         self.fc3h = torch.nn.Linear(self.hidden_size // 16, self.hidden_size // self.h2_div)
-        self.fc3h = linear_variational(self.fc3h)
-        self.variational_layers.append(self.fc3h)
-        self.dpd2 = torch.nn.Dropout(self.dropout)
+        # self.fc3h = linear_variational(self.fc3h)
+        # self.variational_layers.append(self.fc3h)
+        # self.dpd2 = torch.nn.Dropout(self.dropout)
 
         # Group Sparsity
         self.W = torch.nn.Linear(self.inner, (self.hidden_size // self.h2_div) * self.seq_len, bias=False)  # W
@@ -211,9 +198,10 @@ class VAE(torch.nn.Module):
     def decoder(self, x):
         h = self.fc3(x)
         h = F.relu(h)  # First hidden layer after bottleneck
-        h = self.dpd1(h)  # Dropout
-        h = torch.sigmoid(self.fc3h(h))  # Second hidden layer after bottleneck
-        h = self.dpd2(h)
+        # h = self.dpd1(h)  # Dropout
+        h = self.fc3h(h)
+        h = torch.sigmoid(h)  # Second hidden layer after bottleneck
+        # h = self.dpd2(h)
 
         if self.bayesian:
             for module in [self.W, self.C, self.S]:
@@ -237,8 +225,8 @@ class VAE(torch.nn.Module):
         W_out = W_out * S  # W_out :  [hidden x alphabet_size x sew_len]
         W_out = W_out.view(-1, self.input_size)  # W_out :  [hidden x input_size]
 
-        return (1 + lamb.exp()).log() * F.linear(h, W_out.T,
-                                                 b)  # parameterize each final weight matrix as W^(3,i) /paper
+        # parameterize each final weight matrix as W^(3,i) /paper
+        return (1 + lamb.exp()).log() * F.linear(h, W_out.T, b)  
 
     def forward(self, x, rep=True):
         mu, logvar = self.encoder(x)  # encode
