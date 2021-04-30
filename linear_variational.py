@@ -52,6 +52,8 @@ class LinearVariational(torch.nn.Module):
         q_w = dist.Normal(self.w_mu, self.w_p.mul(1 / 2).exp())
         w = q_w.rsample()
 
+        self.parent.accumulated_kl_div = 0
+
         # KLP weight
         self.parent.accumulated_kl_div += self.kl_divergence(q_w, self.w_mu, self.w_p, self.layer_s)
 

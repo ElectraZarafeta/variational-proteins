@@ -1,7 +1,7 @@
 import torch
 from misc import data, c
-#from vae_bayesian import VAE
-from vae_bayes import VAE
+from vae_bayesian import VAE
+#from vae_bayes import VAE
 from torch import optim
 from scipy.stats import spearmanr
 import numpy as np
