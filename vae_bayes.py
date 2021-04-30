@@ -80,12 +80,12 @@ class VAE(torch.nn.Module):
         self.fc22 = torch.nn.Linear(int(self.hidden_size * (3 / 4)), self.latent_size)
 
         # Decoder
-        self.fc3 = torch.nn.Linear(self.latent_size, self.hidden_size // 16)
+        self.fc3 = torch.nn.Linear(self.latent_size, self.hidden_size // 4)
         # self.fc3 = linear_variational(self.fc3)
         # self.variational_layers.append(self.fc3)
         # self.dpd1 = torch.nn.Dropout(self.dropout)
 
-        self.fc3h = torch.nn.Linear(self.hidden_size // 16, self.hidden_size // self.h2_div)
+        self.fc3h = torch.nn.Linear(self.hidden_size // 4, self.hidden_size // self.h2_div)
         # self.fc3h = linear_variational(self.fc3h)
         # self.variational_layers.append(self.fc3h)
         # self.dpd2 = torch.nn.Dropout(self.dropout)
