@@ -1,8 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 import os
-from vae_bayes import VAE
-#from vae_bayesian import VAE
+#from vae_bayes import VAE
+from vae_bayesian import VAE
 import numpy as np
 import pandas as pd
 

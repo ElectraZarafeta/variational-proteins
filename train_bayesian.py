@@ -68,9 +68,9 @@ for epoch in range(250):
         epoch_losses['loss'].append(loss.item())
 
 
-    if epoch % 8 == 0:
+    if epoch % 4 == 0:
         # Evaluation on mutants
-        cor = get_corr_ensample(eval_batch, mutants_df.value, vae, ensamples=128)
+        cor = get_corr_ensample(eval_batch, mutants_df.value, vae, ensamples=256)
 
 
     # Populate statistics
