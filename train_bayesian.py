@@ -1,20 +1,21 @@
 import torch
 from misc import data, c
-from vae_bayesian import VAE
-#from vae_bayes import VAE
+#from vae_bayesian import VAE
+from vae_bayes import VAE
 from torch import optim
 from scipy.stats import spearmanr
 import numpy as np
+from termcolor import colored
 
 
-def get_corr_ensample(batch, mutants_values, model, ensamples=512, rand=False):
+def get_corr_ensample(batch, mutants_values, model, ensamples=128, rand=True):
     model.eval()
 
     mt_elbos, wt_elbos = 0, 0
 
     for i in range(ensamples):
         if i and (i % 2 == 0):
-            print(f"\tReached {i}/rand={rand}", " " * 32, end='\r')
+            print("\r", f"\tReached {i}/rand={rand}", " " * 32, end='')
 
         elbos = model.logp(batch, rand=rand).detach()
         wt_elbos += elbos[0]
@@ -28,8 +29,9 @@ def get_corr_ensample(batch, mutants_values, model, ensamples=512, rand=False):
     return cor
 
 
+batch_size = 128
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-dataloader, df, mutants_tensor, mutants_df, Neff = data(batch_size=64)
+dataloader, df, mutants_tensor, mutants_df, Neff = data(batch_size=batch_size)
 
 wildtype = dataloader.dataset[0]  # one-hot-encoded wildtype
 eval_batch = torch.cat([wildtype.unsqueeze(0), mutants_tensor])
@@ -37,7 +39,8 @@ eval_batch = torch.cat([wildtype.unsqueeze(0), mutants_tensor])
 args = {
     'alphabet_size': dataloader.dataset[0].shape[0],
     'seq_len':       dataloader.dataset[0].shape[1],
-    'Neff':          Neff
+    'Neff':          Neff,
+    'batch_size':    batch_size
 }
 
 data = {'dataloader': dataloader, 'df': df}
@@ -68,9 +71,9 @@ for epoch in range(250):
         epoch_losses['loss'].append(loss.item())
 
 
-    if epoch % 4 == 0:
+    if epoch % 16 == 0:
         # Evaluation on mutants
-        cor = get_corr_ensample(eval_batch, mutants_df.value, vae, ensamples=256)
+        cor = get_corr_ensample(eval_batch, mutants_df.value, vae)
 
 
     # Populate statistics
